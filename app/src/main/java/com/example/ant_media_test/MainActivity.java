@@ -8,6 +8,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.webrtc.IceCandidate;
+import org.webrtc.MediaStream;
+import org.webrtc.SessionDescription;
 import org.webrtc.SurfaceViewRenderer;
 
 import java.util.List;
@@ -36,18 +39,77 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
  }
 
  private void start() {
-   WebRtcClient webRtcClient = new WebRtcClient(this, mCameraRenderer, mRemoteRenderer);
+   WssAntService wss = new WssAntService();
+   WebRtcClient webRtcClient = new WebRtcClient(MainActivity.this, mCameraRenderer, mRemoteRenderer);
+
+   wss.setListener(new WssAntService.WssAntEventListener() {
+     @Override
+     public void onConnected() {
+       wss.commandJoinRoom();
+     }
+
+     @Override
+     public void onMyStreamIdReceive(String myStreamId) {
+      wss.commandPublishOwn(myStreamId);
+     }
+
+     @Override
+     public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
+      remoteStreamsIds.forEach(wss::commandPlayRemote);
+     }
+
+     @Override
+     public void onStart() {
+      //createPeer();
+     }
+
+     @Override
+     public void onTakeCandidate(IceCandidate candidate) {
+      //_peerConnection.addCandidate(candidate);
+     }
+
+     @Override
+     public void onTakeConfiguration(SessionDescription sdp) {
+      /*
+      _peerConnection.setRemoteDescription(description);
+        if (!widget.isHoster) {
+          _peerConnection.createAnswer(_offerSdpConstraints).then((RTCSessionDescription answer) {
+            _peerConnection.setLocalDescription(answer);
+            sendData({"command": "takeConfiguration", "streamId": widget.streamId, "type": "answer", "sdp": answer.sdp});
+          });
+        }
+      * */
+     }
+   });
+
+   webRtcClient.setListener(new WebRtcClient.WebRtcEventsListener() {
+     @Override
+     public void onAddStream(MediaStream mediaStream) {
+       //_stream = stream;
+       //_videoRenderer.srcObject = stream;
+     }
+
+     @Override
+     public void onRemoveStream(MediaStream mediaStream) {
+      //_videoRenderer.srcObject = null;
+     }
+
+     @Override
+     public void onIceCandidate(IceCandidate candidate) {
+      wss.commandSendIceCandidate(candidate);
+     }
+   });
+
    webRtcClient.init();
+   wss.initialize();
  }
 
   @AfterPermissionGranted(PERMISSIONS_CODE)
   private void requestPermissions() {
     String[] perms = { Manifest.permission.INTERNET, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO };
     if (EasyPermissions.hasPermissions(this, perms)) {
-      // Already have permission, do the thing
       start();
     } else {
-      // Do not have permissions, request them now
       EasyPermissions.requestPermissions(this,
         "Permissions needed",
         PERMISSIONS_CODE, perms);
@@ -57,7 +119,6 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   @Override
   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    // Forward results to EasyPermissions
     EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
   }
 
@@ -78,9 +139,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
-
     if (requestCode == AppSettingsDialog.DEFAULT_SETTINGS_REQ_CODE) {
-      // Do something after user returned from app settings screen, like showing a Toast.
       Toast.makeText(this, "Changes accepted", Toast.LENGTH_SHORT).show();
     }
   }
