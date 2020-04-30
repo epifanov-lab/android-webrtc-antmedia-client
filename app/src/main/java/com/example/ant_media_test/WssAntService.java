@@ -18,7 +18,7 @@ import java.util.TimerTask;
 
 public class WssAntService {
 
-  static interface WssAntEventListener {
+  interface WssAntEventListener {
 
   }
 
