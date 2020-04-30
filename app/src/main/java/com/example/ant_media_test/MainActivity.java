@@ -22,16 +22,16 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   private static final String LOG_TAG = "MAIN_LOG";
   private static final int PERMISSIONS_CODE = 100;
 
-  private WebRtcView mCameraRenderer;
-  private WebRtcView mRemoteRenderer;
+  private WebRtcView mLocalView;
+  private WebRtcView mRemoteView;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
 
-    mCameraRenderer = findViewById(R.id.camera_renderer);
-    mRemoteRenderer = findViewById(R.id.remote_renderer);
+    mLocalView = findViewById(R.id.camera_renderer);
+    mRemoteView = findViewById(R.id.remote_renderer);
 
     requestPermissions();
  }
@@ -48,11 +48,13 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
       @Override
       public void onMyStreamIdReceive(String myStreamId) {
         wss.commandPublishOwn(myStreamId);
+        mLocalView.config(true, myStreamId, wss.receiver, wss.sender);
       }
 
       @Override
       public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
         remoteStreamsIds.forEach(wss::commandPlayRemote);
+        mRemoteView.config(false, remoteStreamsIds.get(0), wss.receiver, wss.sender);
       }
 
       @Override

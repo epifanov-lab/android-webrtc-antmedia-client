@@ -17,6 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.function.Consumer;
+
+import reactor.core.publisher.DirectProcessor;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 
 public class WssAntService {
 
@@ -32,6 +37,9 @@ public class WssAntService {
   public static final String SERVER_URL = "https://twilio.rtt.space/ant-ws/";
 
   private WebSocket ws;
+
+  public DirectProcessor<String> receiver = DirectProcessor.create();
+  public DirectProcessor<String> sender = DirectProcessor.create();
   private WssAntEventListener listener;
 
   private String myStreamId;
@@ -45,6 +53,8 @@ public class WssAntService {
     System.out.println("WssAntService.initialize");
     try {
       connect();
+      sender.subscribe(this::send);
+
     } catch (IOException | WebSocketException e) {
       System.out.println("WssAntService.initialize exception: " + e.getMessage());
       e.printStackTrace();
@@ -93,6 +103,8 @@ public class WssAntService {
       public void onTextMessage(WebSocket websocket, String message) throws Exception {
         JSONObject object = new JSONObject(message);
 
+        receiver.onNext(message);
+
         if (object.getString("command").equals("notification")) {
           if (object.getString("definition").equals("joinedTheRoom")) {
 
@@ -132,12 +144,16 @@ public class WssAntService {
     ws.connectAsynchronously();
   }
 
+  private void send(String text) {
+    ws.sendText(text);
+  }
+
   public void commandJoinRoom() {
-    ws.sendText("{\"command\": \"joinRoom\", \"room\": \"test-room\"}");
+    send("{\"command\": \"joinRoom\", \"room\": \"test-room\"}");
   }
 
   public void commandPlayRemote(String remoteStreamId) {
-    ws.sendText("{" +
+    send("{" +
       "\"command\": \"play\", " +
       "\"streamId\": \"" + remoteStreamId + "\", " +
       "\"token\": null, " +
@@ -146,7 +162,7 @@ public class WssAntService {
   }
 
   public void commandPublishOwn(String myStreamId) {
-    ws.sendText("{" +
+    send("{" +
       "\"command\": \"publish\", " +
       "\"streamId\": \"" + myStreamId + "\", " +
       "\"token\": null, " +
@@ -158,7 +174,7 @@ public class WssAntService {
   public void commandSendIceCandidate(IceCandidate candidate) {
     //candidate:1931329575 1 udp 1686052607 18.156.135.165 50053 typ srflx raddr 172.31.46.199 rport 50053 generation 0 ufrag OrfT network-id 1 network-cost 50
     if (candidate != null) {
-      ws.sendText("{" +
+      send("{" +
         "\"command\": \"takeCandidate\", " +
         "\"streamId\": \"" + myStreamId + "\", " +
         "\"label\": \"" + candidate.sdpMLineIndex + "\", " +
