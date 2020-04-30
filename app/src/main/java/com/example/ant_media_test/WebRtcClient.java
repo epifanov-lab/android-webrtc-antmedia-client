@@ -11,6 +11,7 @@ import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
 import org.webrtc.IceCandidate;
 import org.webrtc.MediaStream;
+import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RtpReceiver;
 import org.webrtc.SurfaceTextureHelper;
@@ -46,6 +47,7 @@ public class WebRtcClient {
   private SurfaceViewRenderer remoteRenderer;
 
   private PeerConnectionFactory peerConnectionFactory;
+  private PeerConnection peerConnection;
   private WebRtcEventsListener listener;
 
   public WebRtcClient(Context context, SurfaceViewRenderer cameraRenderer, SurfaceViewRenderer remoteRenderer) {
@@ -79,7 +81,7 @@ public class WebRtcClient {
     VideoSource localVideoSource = peerConnectionFactory.createVideoSource(false);
     SurfaceTextureHelper surfaceTextureHelper = SurfaceTextureHelper.create(Thread.currentThread().getName(), rootEglBase.getEglBaseContext());
     cameraCapturer.initialize(surfaceTextureHelper, context, localVideoSource.getCapturerObserver());
-    cameraCapturer.startCapture(360, 240, 60);
+    cameraCapturer.startCapture(1280, 720, 60);
     VideoTrack localVideoTrack = peerConnectionFactory.createVideoTrack(LOCAL_TRACK_ID, localVideoSource);
     localVideoTrack.addSink(cameraRenderer);
 
@@ -152,10 +154,7 @@ public class WebRtcClient {
       }
     };
 
-    peerConnectionFactory.createPeerConnection(
-      stunServer,
-      observer
-    );
+    peerConnection = peerConnectionFactory.createPeerConnection(stunServer, observer);
   }
 
   private CameraVideoCapturer createCameraCapturer(CameraEnumerator enumerator) {

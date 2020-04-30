@@ -9,9 +9,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.webrtc.IceCandidate;
-import org.webrtc.MediaStream;
 import org.webrtc.SessionDescription;
-import org.webrtc.SurfaceViewRenderer;
 
 import java.util.List;
 
@@ -24,8 +22,8 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   private static final String LOG_TAG = "MAIN_LOG";
   private static final int PERMISSIONS_CODE = 100;
 
-  private SurfaceViewRenderer mCameraRenderer;
-  private SurfaceViewRenderer mRemoteRenderer;
+  private WebRtcView mCameraRenderer;
+  private WebRtcView mRemoteRenderer;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -38,38 +36,37 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     requestPermissions();
  }
 
- private void start() {
-   WssAntService wss = new WssAntService();
-   WebRtcClient webRtcClient = new WebRtcClient(MainActivity.this, mCameraRenderer, mRemoteRenderer);
+  private void start() {
+    WssAntService wss = new WssAntService();
 
-   wss.setListener(new WssAntService.WssAntEventListener() {
-     @Override
-     public void onConnected() {
-       wss.commandJoinRoom();
-     }
+    wss.setListener(new WssAntService.WssAntEventListener() {
+      @Override
+      public void onConnected() {
+        wss.commandJoinRoom();
+      }
 
-     @Override
-     public void onMyStreamIdReceive(String myStreamId) {
-      wss.commandPublishOwn(myStreamId);
-     }
+      @Override
+      public void onMyStreamIdReceive(String myStreamId) {
+        wss.commandPublishOwn(myStreamId);
+      }
 
-     @Override
-     public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
-      remoteStreamsIds.forEach(wss::commandPlayRemote);
-     }
+      @Override
+      public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
+        remoteStreamsIds.forEach(wss::commandPlayRemote);
+      }
 
-     @Override
-     public void onStart() {
-      //createPeer();
-     }
+      @Override
+      public void onStart() {
+        //createPeer();
+      }
 
-     @Override
-     public void onTakeCandidate(IceCandidate candidate) {
-      //_peerConnection.addCandidate(candidate);
-     }
+      @Override
+      public void onTakeCandidate(IceCandidate candidate) {
+        //_peerConnection.addCandidate(candidate);
+      }
 
-     @Override
-     public void onTakeConfiguration(SessionDescription sdp) {
+      @Override
+      public void onTakeConfiguration(SessionDescription sdp) {
       /*
       _peerConnection.setRemoteDescription(description);
         if (!widget.isHoster) {
@@ -79,30 +76,11 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
           });
         }
       * */
-     }
-   });
+      }
+    });
 
-   webRtcClient.setListener(new WebRtcClient.WebRtcEventsListener() {
-     @Override
-     public void onAddStream(MediaStream mediaStream) {
-       //_stream = stream;
-       //_videoRenderer.srcObject = stream;
-     }
-
-     @Override
-     public void onRemoveStream(MediaStream mediaStream) {
-      //_videoRenderer.srcObject = null;
-     }
-
-     @Override
-     public void onIceCandidate(IceCandidate candidate) {
-      wss.commandSendIceCandidate(candidate);
-     }
-   });
-
-   webRtcClient.init();
-   wss.initialize();
- }
+    wss.initialize();
+  }
 
   @AfterPermissionGranted(PERMISSIONS_CODE)
   private void requestPermissions() {
