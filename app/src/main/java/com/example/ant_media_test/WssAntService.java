@@ -53,13 +53,13 @@ public class WssAntService {
   }
 
   public void initialize() {
-    System.out.println("WssAntService.initialize");
+    System.out.println("##### WssAntService.initialize");
     try {
       connect();
       sender.subscribe(this::send);
 
     } catch (IOException | WebSocketException e) {
-      System.out.println("WssAntService.initialize exception: " + e.getMessage());
+      System.out.println("##### WssAntService.initialize exception: " + e.getMessage());
       e.printStackTrace();
     }
   }
@@ -72,7 +72,7 @@ public class WssAntService {
       @Override
       public void onConnected(WebSocket websocket, Map<String, List<String>> headers) throws Exception {
         super.onConnected(websocket, headers);
-        System.out.println("WssAntService.onConnected");
+        System.out.println("##### WssAntService.onConnected");
         listeners.forEach(listener -> listener.onConnected());
         new Timer().scheduleAtFixedRate(new TimerTask() {
           @Override
@@ -85,21 +85,21 @@ public class WssAntService {
       @Override
       public void onDisconnected(WebSocket websocket, WebSocketFrame serverCloseFrame, WebSocketFrame clientCloseFrame, boolean closedByServer) throws Exception {
         super.onDisconnected(websocket, serverCloseFrame, clientCloseFrame, closedByServer);
-        System.out.println("WssAntService.onDisconnected: serverCloseFrame = " + serverCloseFrame + ", clientCloseFrame = " + clientCloseFrame + ", closedByServer = " + closedByServer);
+        System.out.println("##### WssAntService.onDisconnected: serverCloseFrame = " + serverCloseFrame + ", clientCloseFrame = " + clientCloseFrame + ", closedByServer = " + closedByServer);
       }
 
       @Override
       public void onSendingFrame(WebSocket websocket, WebSocketFrame frame) throws Exception {
         super.onSendingFrame(websocket, frame);
         if (!frame.getPayloadText().contains("ping"))
-        System.out.println("WssAntService >>> " + frame.getPayloadText());
+        System.out.println("##### WssAntService >>> " + frame.getPayloadText());
       }
 
       @Override
       public void onFrame(WebSocket websocket, WebSocketFrame frame) throws Exception {
         super.onFrame(websocket, frame);
         if (!frame.getPayloadText().contains("pong"))
-          System.out.println("WssAntService <<< " + frame.getPayloadText());
+          System.out.println("##### WssAntService <<< " + frame.getPayloadText());
       }
 
       @Override
@@ -134,7 +134,10 @@ public class WssAntService {
           listeners.forEach(listener -> listener.onStart());
 
         } else if (object.getString("command").equals("takeCandidate")) {
-          IceCandidate candidate = new IceCandidate("", 0, ""); //TODO IMPL
+          System.out.println("##### @@@@@ @@@@@ " + message);
+          //"candidate":"candidate:4065707667 1 udp 2122260223 172.31.46.199 45920 typ host generation
+          //0 ufrag p4pe network-id 1 network-cost 50","streamId":"ZUtrstEMAOHxnVOL","label":0,"id":"audio","command":"takeCandidate"
+          IceCandidate candidate = new IceCandidate("", 0, "");
           listeners.forEach(listener -> listener.onTakeCandidate(candidate));
 
         } else if (object.getString("command").equals("takeConfiguration")) {
@@ -147,30 +150,40 @@ public class WssAntService {
     ws.connectAsynchronously();
   }
 
-  private void send(String text) {
+  public void send(String text) {
     ws.sendText(text);
   }
 
   public void commandJoinRoom() {
-    send("{\"command\": \"joinRoom\", \"room\": \"test-room\"}");
+    send("{\"command\":\"joinRoom\", \"room\":\"test-room\"}");
   }
 
   public void commandPlayRemote(String remoteStreamId) {
     send("{" +
-      "\"command\": \"play\", " +
-      "\"streamId\": \"" + remoteStreamId + "\", " +
-      "\"token\": null, " +
-      "\"room\": \"test-room\"" +
+      "\"command\":\"play\", " +
+      "\"streamId\":\"" + remoteStreamId + "\", " +
+      "\"token\":null, " +
+      "\"room\":\"test-room\"" +
       "}");
   }
 
   public void commandPublishOwn(String myStreamId) {
     send("{" +
-      "\"command\": \"publish\", " +
-      "\"streamId\": \"" + myStreamId + "\", " +
-      "\"token\": null, " +
-      "\"video\": true, " +
-      "\"audio\": true" +
+      "\"command\":\"publish\", " +
+      "\"streamId\":\"" + myStreamId + "\", " +
+      "\"token\":null, " +
+      "\"video\":true, " +
+      "\"audio\":true" +
+      "}");
+  }
+
+  public void commandSendSdp(String streamId, SessionDescription sdp) {
+    //sendData({"command": "takeConfiguration", "streamId": widget.streamId, "type": "offer", "sdp": description.sdp});
+    send("{" +
+      "\"command\":\"takeConfiguration\", " +
+      "\"streamId\":\"" + streamId + "\", " +
+      "\"type\":\"offer\", " +
+      "\"sdp\":\"" + sdp.description + "\", " +
       "}");
   }
 
@@ -178,11 +191,11 @@ public class WssAntService {
     //candidate:1931329575 1 udp 1686052607 18.156.135.165 50053 typ srflx raddr 172.31.46.199 rport 50053 generation 0 ufrag OrfT network-id 1 network-cost 50
     if (candidate != null) {
       send("{" +
-        "\"command\": \"takeCandidate\", " +
-        "\"streamId\": \"" + myStreamId + "\", " +
-        "\"label\": \"" + candidate.sdpMLineIndex + "\", " +
-        "\"id\": \"" + candidate.sdpMid + "\", " +
-        "\"candidate\": \"" + candidate + "\", " +
+        "\"command\":\"takeCandidate\", " +
+        "\"streamId\":\"" + myStreamId + "\", " +
+        "\"label\":\"" + candidate.sdpMLineIndex + "\", " +
+        "\"id\":\"" + candidate.sdpMid + "\", " +
+        "\"candidate\":\"" + candidate + "\", " +
         "}");
     }
   }
