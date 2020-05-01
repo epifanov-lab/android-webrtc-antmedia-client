@@ -3,6 +3,7 @@ package com.example.ant_media_test;
 import android.Manifest;
 import android.content.Intent;
 import android.os.Bundle;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -19,6 +20,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   private static final String LOG_TAG = "MAIN_LOG";
   private static final int PERMISSIONS_CODE = 100;
 
+  private LinearLayout mContainer;
   private WebRtcView mLocalView;
   private WebRtcView mRemoteView;
 
@@ -27,6 +29,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
 
+    mContainer = findViewById(R.id.container);
     mLocalView = findViewById(R.id.camera_renderer);
     mRemoteView = findViewById(R.id.remote_renderer);
 

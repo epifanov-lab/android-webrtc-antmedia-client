@@ -8,6 +8,7 @@ import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.webrtc.AudioSource;
 import org.webrtc.Camera1Enumerator;
 import org.webrtc.CameraEnumerator;
 import org.webrtc.CameraVideoCapturer;
@@ -38,18 +39,24 @@ import static org.webrtc.PeerConnectionFactory.builder;
 
 public class WebRtcView extends FrameLayout {
 
-  private static final String LOCAL_TRACK_ID = "local_track_id";
+  private static final String LOCAL_VIDEO_TRACK_ID = "local_video_track_id";
+  private static final String LOCAL_AUDIO_TRACK_ID = "local_audio_track_id";
   private static final String LOCAL_STREAM_ID = "local_stream_id";
   private SurfaceViewRenderer renderer;
 
   private EglBase rootEglBase;
   private PeerConnectionFactory peerConnectionFactory;
   private PeerConnection peerConnection;
-  private MediaConstraints constraints;
+
+  private MediaConstraints offerSdpConstraints;
+  private MediaConstraints audioConstraints;
+  private MediaConstraints videoConstraints;
 
   private boolean isLocal;
   private String streamId;
   private WssAntService wss;
+
+  private boolean initialized = false;
 
   public WebRtcView(@NonNull Context context) {
     this(context, null);
@@ -66,8 +73,9 @@ public class WebRtcView extends FrameLayout {
     addView(renderer);
   }
 
-  public void initialize(boolean isHoster, String streamId, WssAntService service) {
-    this.isLocal = isHoster;
+  public void initialize(boolean isLocal, String streamId, WssAntService service) {
+    System.out.println(WebRtcView.this.hashCode() + " ##### @@@@@ WebRtcView initialize " + isLocal + "  ---  " + streamId);
+    this.isLocal = isLocal;
     this.streamId = streamId;
     this.wss = service;
     /* --- */
@@ -86,21 +94,24 @@ public class WebRtcView extends FrameLayout {
       .setVideoEncoderFactory(new DefaultVideoEncoderFactory(rootEglBase.getEglBaseContext(), true, true))
       .createPeerConnectionFactory();
 
-    constraints = new MediaConstraints();
-    constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
-    constraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
+    offerSdpConstraints = new MediaConstraints();
+    offerSdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
+    offerSdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
 
-    if (isHoster) {
+    audioConstraints = new MediaConstraints();
+    audioConstraints.mandatory.add(new MediaConstraints.KeyValuePair("audio", "true"));
+
+    if (isLocal) {
       wss.commandPublishOwn(streamId);
     } else {
-      //createPeerConnecton();
+      ((Activity) getContext()).runOnUiThread(() -> createPeerConnection());
       wss.commandPlayRemote(streamId);
     }
 
     wss.addListener(new WssAntService.WssAntEventListener() {
       @Override
       public void onStart() {
-        ((Activity) getContext()).runOnUiThread(() -> createPeerConnecton());
+        ((Activity) getContext()).runOnUiThread(() -> createPeerConnection());
       }
 
       @Override
@@ -113,55 +124,59 @@ public class WebRtcView extends FrameLayout {
         peerConnection.setRemoteDescription(new SdpObserver() {
           @Override
           public void onCreateSuccess(SessionDescription sdp) {
-            System.out.println("##### setRemoteDescription onCreateSuccess: " + sdp);
+            System.out.println(WebRtcView.this.hashCode() + " ##### setRemoteDescription onCreateSuccess: " + sdp);
           }
 
           @Override
           public void onSetSuccess() {
-            System.out.println("##### setRemoteDescription onSetSuccess");
+            System.out.println(WebRtcView.this.hashCode() + " ##### setRemoteDescription onSetSuccess");
           }
 
           @Override
           public void onCreateFailure(String s) {
-            System.out.println("##### setRemoteDescription onCreateFailure: " + s);
+            System.out.println(WebRtcView.this.hashCode() + " ##### setRemoteDescription onCreateFailure: " + s);
           }
 
           @Override
           public void onSetFailure(String s) {
-            System.out.println("##### setRemoteDescription onSetFailure: " + s);
+            System.out.println(WebRtcView.this.hashCode() + " ##### setRemoteDescription onSetFailure: " + s);
           }
         }, sdp);
 
-        if (!isLocal) {
+        if (!WebRtcView.this.isLocal) {
           peerConnection.createAnswer(new SdpObserver() {
             @Override
             public void onCreateSuccess(SessionDescription sdp) {
-              System.out.println("##### remote createAnswer onCreateSuccess: " + sdp);
-              setLocalSdp(sdp);
+              System.out.println(WebRtcView.this.hashCode() + " ##### remote createAnswer onCreateSuccess: " + sdp);
               wss.commandSendSdp(streamId, sdp);
+              setLocalSdp(sdp);
             }
 
             @Override
             public void onSetSuccess() {
-              System.out.println("##### remote createAnswer onSetSuccess");
+              System.out.println(WebRtcView.this.hashCode() + " ##### remote createAnswer onSetSuccess");
             }
 
             @Override
             public void onCreateFailure(String s) {
-              System.out.println("##### remote createAnswer onCreateFailure: " + s);
+              System.out.println(WebRtcView.this.hashCode() + " ##### remote createAnswer onCreateFailure: " + s);
             }
 
             @Override
             public void onSetFailure(String s) {
-              System.out.println("##### remote createAnswer onSetFailure: " + s);
+              System.out.println(WebRtcView.this.hashCode() + " ##### remote createAnswer onSetFailure: " + s);
             }
-          }, constraints);
+          }, offerSdpConstraints);
         }
       }
     });
   }
 
-  private void createPeerConnecton() {
+  private void createPeerConnection() {
+    System.out.println(WebRtcView.this.hashCode() + " ##### @@@@@ PeerConnection.createPeerConnection");
+    if (initialized) return;
+    initialized = true;
+
     List<PeerConnection.IceServer> stunServer = Arrays.asList(
       PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     );
@@ -169,59 +184,60 @@ public class WebRtcView extends FrameLayout {
     PeerConnection.Observer observer = new PeerConnection.Observer() {
       @Override
       public void onSignalingChange(PeerConnection.SignalingState signalingState) {
-        System.out.println("##### PeerConnection.Observer.onSignalingChange");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onSignalingChange");
       }
 
       @Override
       public void onIceConnectionChange(PeerConnection.IceConnectionState iceConnectionState) {
-        System.out.println("##### PeerConnection.Observer.onIceConnectionChange");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onIceConnectionChange");
       }
 
       @Override
       public void onIceConnectionReceivingChange(boolean b) {
-        System.out.println("##### PeerConnection.Observer.onIceConnectionReceivingChange");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onIceConnectionReceivingChange");
       }
 
       @Override
       public void onIceGatheringChange(PeerConnection.IceGatheringState iceGatheringState) {
-        System.out.println("##### PeerConnection.Observer.onIceGatheringChange");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onIceGatheringChange");
       }
 
       @Override
       public void onIceCandidate(IceCandidate iceCandidate) {
-        System.out.println("##### PeerConnection.Observer.onIceCandidate");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onIceCandidate");
         wss.commandSendIceCandidate(iceCandidate);
       }
 
       @Override
       public void onIceCandidatesRemoved(IceCandidate[] iceCandidates) {
-        System.out.println("##### PeerConnection.Observer.onIceCandidatesRemoved");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onIceCandidatesRemoved");
       }
 
       @Override
       public void onAddStream(MediaStream mediaStream) {
-        System.out.println("##### PeerConnection.Observer.onAddStream");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onAddStream: " + mediaStream);
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onAddStream: " + renderer);
         if (!isLocal) mediaStream.videoTracks.get(0).addSink(renderer);
       }
 
       @Override
       public void onRemoveStream(MediaStream mediaStream) {
-        System.out.println("##### PeerConnection.Observer.onRemoveStream");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onRemoveStream");
       }
 
       @Override
       public void onDataChannel(DataChannel dataChannel) {
-        System.out.println("##### PeerConnection.Observer.onDataChannel");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onDataChannel");
       }
 
       @Override
       public void onRenegotiationNeeded() {
-        System.out.println("##### PeerConnection.Observer.onRenegotiationNeeded");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onRenegotiationNeeded");
       }
 
       @Override
       public void onAddTrack(RtpReceiver rtpReceiver, MediaStream[] mediaStreams) {
-        System.out.println("##### PeerConnection.Observer.onAddTrack");
+        System.out.println(WebRtcView.this.hashCode() + " ##### PeerConnection.Observer.onAddTrack");
       }
     };
 
@@ -230,65 +246,67 @@ public class WebRtcView extends FrameLayout {
     if (isLocal) {
       VideoCapturer cameraCapturer = createCameraCapturer(new Camera1Enumerator());
       VideoSource localVideoSource = peerConnectionFactory.createVideoSource(false);
+      AudioSource localAudioSource = peerConnectionFactory.createAudioSource(audioConstraints);
       SurfaceTextureHelper surfaceTextureHelper = SurfaceTextureHelper.create(Thread.currentThread().getName(), rootEglBase.getEglBaseContext());
       cameraCapturer.initialize(surfaceTextureHelper, getContext(), localVideoSource.getCapturerObserver());
       cameraCapturer.startCapture(1280, 720, 30);
-      VideoTrack localVideoTrack = peerConnectionFactory.createVideoTrack(LOCAL_TRACK_ID, localVideoSource);
-      localVideoTrack.addSink(renderer);
+      VideoTrack localVideoTrack = peerConnectionFactory.createVideoTrack(LOCAL_VIDEO_TRACK_ID, localVideoSource);
       MediaStream localStream = peerConnectionFactory.createLocalMediaStream(LOCAL_STREAM_ID);
       localStream.addTrack(localVideoTrack);
+      System.out.println(WebRtcView.this.hashCode() + " ##### WebRtcView, isLocal, add stream: " + localStream);
+      localStream.videoTracks.get(0).addSink(renderer);
       peerConnection.addStream(localStream);
-
-      renderer.setMirror(true);
-      renderer.setEnableHardwareScaler(true);
-      renderer.init(rootEglBase.getEglBaseContext(), null);
 
       peerConnection.createOffer(new SdpObserver() {
         @Override
         public void onCreateSuccess(SessionDescription sdp) {
-          System.out.println("##### localSdpObserver.onCreateSuccess: " + sdp);
+          System.out.println(WebRtcView.this.hashCode() + " ##### localSdpObserver.onCreateSuccess: " + sdp);
           setLocalSdp(sdp);
         }
 
         @Override
         public void onSetSuccess() {
-          System.out.println("##### localSdpObserver.onSetSuccess");
+          System.out.println(WebRtcView.this.hashCode() + " ##### localSdpObserver.onSetSuccess");
         }
 
         @Override
         public void onCreateFailure(String s) {
-          System.out.println("##### localSdpObserver.onCreateFailure: " + s);
+          System.out.println(WebRtcView.this.hashCode() + " ##### localSdpObserver.onCreateFailure: " + s);
         }
 
         @Override
         public void onSetFailure(String s) {
-          System.out.println("##### localSdpObserver.onSetFailure: " + s);
+          System.out.println(WebRtcView.this.hashCode() + " ##### localSdpObserver.onSetFailure: " + s);
         }
-      }, constraints);
+      }, offerSdpConstraints);
     }
+
+    renderer.setMirror(isLocal);
+    renderer.setEnableHardwareScaler(true);
+    renderer.init(rootEglBase.getEglBaseContext(), null);
   }
 
   private void setLocalSdp(SessionDescription sdp) {
     peerConnection.setLocalDescription(new SdpObserver() {
       @Override
       public void onCreateSuccess(SessionDescription sdp) {
-        System.out.println("##### setLocalSdp.onCreateSuccess: " + sdp);
+        System.out.println(WebRtcView.this.hashCode() + " ##### setLocalSdp.onCreateSuccess: " + sdp);
       }
 
       @Override
       public void onSetSuccess() {
-        System.out.println("##### setLocalSdp.onSetSuccess");
+        System.out.println(WebRtcView.this.hashCode() + " ##### setLocalSdp.onSetSuccess");
         wss.commandSendSdp(streamId, sdp);
       }
 
       @Override
       public void onCreateFailure(String s) {
-        System.out.println("##### setLocalSdp.onCreateFailure: " + s);
+        System.out.println(WebRtcView.this.hashCode() + " ##### setLocalSdp.onCreateFailure: " + s);
       }
 
       @Override
       public void onSetFailure(String s) {
-        System.out.println("##### setLocalSdp.onSetFailure: " + s);
+        System.out.println(WebRtcView.this.hashCode() + " ##### setLocalSdp.onSetFailure: " + s);
       }
     }, sdp);
   }
@@ -296,7 +314,7 @@ public class WebRtcView extends FrameLayout {
   private CameraVideoCapturer createCameraCapturer(CameraEnumerator enumerator) {
     String[] deviceNames = enumerator.getDeviceNames();
     for (String deviceName : deviceNames) {
-      System.out.println("WebRtcClient.createCameraCapturer cameras: " + deviceName);
+      System.out.println(WebRtcView.this.hashCode() + " ##### WebRtcClient.createCameraCapturer cameras: " + deviceName);
       if (enumerator.isFrontFacing(deviceName)) {
         CameraVideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
         if (videoCapturer != null) return videoCapturer;
@@ -305,7 +323,7 @@ public class WebRtcView extends FrameLayout {
 
     for (String deviceName : deviceNames) {
       if (!enumerator.isFrontFacing(deviceName)) {
-        System.out.println("Creating other camera capturer.");
+        System.out.println(WebRtcView.this.hashCode() + " ##### Creating other camera capturer.");
         CameraVideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
         if (videoCapturer != null) return videoCapturer;
       }

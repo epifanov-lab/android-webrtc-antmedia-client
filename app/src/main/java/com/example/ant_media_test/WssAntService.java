@@ -18,8 +18,6 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import reactor.core.publisher.DirectProcessor;
-
 public class WssAntService {
 
   /* todo remove listener */
@@ -36,8 +34,8 @@ public class WssAntService {
 
   private WebSocket ws;
 
-  public DirectProcessor<String> receiver = DirectProcessor.create();
-  public DirectProcessor<String> sender = DirectProcessor.create();
+  //public DirectProcessor<String> receiver = DirectProcessor.create();
+  //public DirectProcessor<String> sender = DirectProcessor.create();
 
   private List<WssAntEventListener> listeners = new ArrayList<>();
 
@@ -45,6 +43,7 @@ public class WssAntService {
   private List<String> remoteStreamsIds = new ArrayList<>();
 
   public void addListener(WssAntEventListener listener) {
+    System.out.println("##### listener added");
     listeners.add(listener);
   }
 
@@ -56,7 +55,7 @@ public class WssAntService {
     System.out.println("##### WssAntService.initialize");
     try {
       connect();
-      sender.subscribe(this::send);
+      //sender.subscribe(this::send);
 
     } catch (IOException | WebSocketException e) {
       System.out.println("##### WssAntService.initialize exception: " + e.getMessage());
@@ -105,45 +104,64 @@ public class WssAntService {
       @Override
       public void onTextMessage(WebSocket websocket, String message) throws Exception {
         JSONObject object = new JSONObject(message);
+        //receiver.onNext(message);
 
-        receiver.onNext(message);
+        switch (object.getString("command")) {
+          case "notification":
+            switch (object.getString("definition")) {
+              case "joinedTheRoom":
 
-        if (object.getString("command").equals("notification")) {
-          if (object.getString("definition").equals("joinedTheRoom")) {
+                myStreamId = object.getString("streamId");
 
-            myStreamId = object.getString("streamId");
-            listeners.forEach(listener -> listener.onMyStreamIdReceive(myStreamId));
+                JSONArray array = object.optJSONArray("streams");
+                if (array != null) {
+                  for (int i = 0; i < array.length(); i++) {
+                    String remoteStreamId = (String) array.get(i);
+                    remoteStreamsIds.add(remoteStreamId);
+                  }
+                }
 
-            JSONArray array = object.getJSONArray("streams");
-            for (int i = 0; i < array.length(); i++) {
-              String remoteStreamId = (String) array.get(i);
-              remoteStreamsIds.add(remoteStreamId);
+                System.out.println("##### joinedTheRoom: my " + myStreamId);
+                System.out.println("##### joinedTheRoom: remote " + remoteStreamsIds);
+
+                listeners.forEach(listener -> {
+                  System.out.println("##### emit");
+                  listener.onMyStreamIdReceive(myStreamId);
+                  listener.onRemoteStreamsIdReceive(remoteStreamsIds);
+                });
+
+                break;
+              case "streamJoined":
+                String remoteStreamId = object.getString("streamId");
+                remoteStreamsIds.add(remoteStreamId);
+                listeners.forEach(listener -> listener.onRemoteStreamsIdReceive(remoteStreamsIds));
+
+                break;
+              case "streamLeaved":
+                remoteStreamsIds.remove(object.getString("streamId"));
+                //ignore
+                break;
             }
-            listeners.forEach(listener -> listener.onRemoteStreamsIdReceive(remoteStreamsIds));
+            break;
+          case "start":
+            listeners.forEach(listener -> listener.onStart());
 
-          } else if (object.getString("definition").equals("streamJoined")) {
-            String remoteStreamId = object.getString("streamId");
-            remoteStreamsIds.add(remoteStreamId);
-            listeners.forEach(listener -> listener.onRemoteStreamsIdReceive(remoteStreamsIds));
+            break;
+          case "takeCandidate":
+            //"candidate":"candidate:4065707667 1 udp 2122260223 172.31.46.199 45920 typ host generation 0 ufrag p4pe network-id 1 network-cost 50",
+            //"streamId":"ZUtrstEMAOHxnVOL","label":0,"id":"audio","command":"takeCandidate"
+            IceCandidate candidate = new IceCandidate(object.getString("id"),
+              object.getInt("label"), object.getString("candidate"));
+            System.out.println("##### ws takeCandidate " + candidate);
+            listeners.forEach(listener -> listener.onTakeCandidate(candidate));
 
-          } else if (object.getString("definition").equals("streamLeaved")) {
-            remoteStreamsIds.remove(object.getString("streamId"));
-            //ignore
-          }
-        } else if (object.getString("command").equals("start")) {
-          listeners.forEach(listener -> listener.onStart());
-
-        } else if (object.getString("command").equals("takeCandidate")) {
-          System.out.println("##### @@@@@ @@@@@ " + message);
-          //"candidate":"candidate:4065707667 1 udp 2122260223 172.31.46.199 45920 typ host generation
-          //0 ufrag p4pe network-id 1 network-cost 50","streamId":"ZUtrstEMAOHxnVOL","label":0,"id":"audio","command":"takeCandidate"
-          IceCandidate candidate = new IceCandidate("", 0, "");
-          listeners.forEach(listener -> listener.onTakeCandidate(candidate));
-
-        } else if (object.getString("command").equals("takeConfiguration")) {
-          SessionDescription.Type type = SessionDescription.Type.fromCanonicalForm(object.getString("type"));
-          SessionDescription sdp = new SessionDescription(type, object.getString("sdp"));
-          listeners.forEach(listener -> listener.onTakeConfiguration(sdp));
+            break;
+          case "takeConfiguration":
+            SessionDescription.Type type = SessionDescription.Type.fromCanonicalForm(object.getString("type"));
+            SessionDescription sdp = new SessionDescription(type, object.getString("sdp"));
+            System.out.println("##### ws takeConfiguration: " + sdp.type);
+            listeners.forEach(listener -> listener.onTakeConfiguration(sdp));
+            break;
         }
     }});
 
@@ -178,12 +196,13 @@ public class WssAntService {
   }
 
   public void commandSendSdp(String streamId, SessionDescription sdp) {
+    System.out.println("##### WS SEND SDP: " + streamId + " " + sdp.type);
     //sendData({"command": "takeConfiguration", "streamId": widget.streamId, "type": "offer", "sdp": description.sdp});
     send("{" +
       "\"command\":\"takeConfiguration\", " +
       "\"streamId\":\"" + streamId + "\", " +
-      "\"type\":\"offer\", " +
-      "\"sdp\":\"" + sdp.description + "\", " +
+      "\"type\":\"" + sdp.type.canonicalForm() + "\", " +
+      "\"sdp\":\"" + sdp.description + "\"" +
       "}");
   }
 
@@ -193,9 +212,9 @@ public class WssAntService {
       send("{" +
         "\"command\":\"takeCandidate\", " +
         "\"streamId\":\"" + myStreamId + "\", " +
-        "\"label\":\"" + candidate.sdpMLineIndex + "\", " +
+        "\"label\":" + candidate.sdpMLineIndex + ", " +
         "\"id\":\"" + candidate.sdpMid + "\", " +
-        "\"candidate\":\"" + candidate + "\", " +
+        "\"candidate\":\"" + candidate + "\"" +
         "}");
     }
   }
