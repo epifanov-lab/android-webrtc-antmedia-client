@@ -17,21 +17,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.function.Consumer;
 
 import reactor.core.publisher.DirectProcessor;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 
 public class WssAntService {
 
+  /* todo remove listener */
   interface WssAntEventListener {
-    void onConnected();
-    void onMyStreamIdReceive(String myStreamId);
-    void onRemoteStreamsIdReceive(List<String> remoteStreamsIds);
-    void onStart();
-    void onTakeCandidate(IceCandidate candidate);
-    void onTakeConfiguration(SessionDescription sdp);
+    default void onConnected(){}
+    default void onMyStreamIdReceive(String myStreamId){}
+    default void onRemoteStreamsIdReceive(List<String> remoteStreamsIds){}
+    default void onStart(){}
+    default void onTakeCandidate(IceCandidate candidate){}
+    default void onTakeConfiguration(SessionDescription sdp){}
   }
 
   public static final String SERVER_URL = "https://twilio.rtt.space/ant-ws/";
@@ -40,13 +38,18 @@ public class WssAntService {
 
   public DirectProcessor<String> receiver = DirectProcessor.create();
   public DirectProcessor<String> sender = DirectProcessor.create();
-  private WssAntEventListener listener;
+
+  private List<WssAntEventListener> listeners = new ArrayList<>();
 
   private String myStreamId;
   private List<String> remoteStreamsIds = new ArrayList<>();
 
-  public void setListener(WssAntEventListener listener) {
-    this.listener = listener;
+  public void addListener(WssAntEventListener listener) {
+    listeners.add(listener);
+  }
+
+  public void removeListener(WssAntEventListener listener) {
+    listeners.remove(listener);
   }
 
   public void initialize() {
@@ -70,7 +73,7 @@ public class WssAntService {
       public void onConnected(WebSocket websocket, Map<String, List<String>> headers) throws Exception {
         super.onConnected(websocket, headers);
         System.out.println("WssAntService.onConnected");
-        listener.onConnected();
+        listeners.forEach(listener -> listener.onConnected());
         new Timer().scheduleAtFixedRate(new TimerTask() {
           @Override
           public void run() {
@@ -109,35 +112,35 @@ public class WssAntService {
           if (object.getString("definition").equals("joinedTheRoom")) {
 
             myStreamId = object.getString("streamId");
-            listener.onMyStreamIdReceive(myStreamId);
+            listeners.forEach(listener -> listener.onMyStreamIdReceive(myStreamId));
 
             JSONArray array = object.getJSONArray("streams");
             for (int i = 0; i < array.length(); i++) {
               String remoteStreamId = (String) array.get(i);
               remoteStreamsIds.add(remoteStreamId);
             }
-            listener.onRemoteStreamsIdReceive(remoteStreamsIds);
+            listeners.forEach(listener -> listener.onRemoteStreamsIdReceive(remoteStreamsIds));
 
           } else if (object.getString("definition").equals("streamJoined")) {
             String remoteStreamId = object.getString("streamId");
             remoteStreamsIds.add(remoteStreamId);
-            listener.onRemoteStreamsIdReceive(remoteStreamsIds);
+            listeners.forEach(listener -> listener.onRemoteStreamsIdReceive(remoteStreamsIds));
 
           } else if (object.getString("definition").equals("streamLeaved")) {
             remoteStreamsIds.remove(object.getString("streamId"));
             //ignore
           }
         } else if (object.getString("command").equals("start")) {
-          listener.onStart();
+          listeners.forEach(listener -> listener.onStart());
 
         } else if (object.getString("command").equals("takeCandidate")) {
           IceCandidate candidate = new IceCandidate("", 0, ""); //TODO IMPL
-          listener.onTakeCandidate(candidate);
+          listeners.forEach(listener -> listener.onTakeCandidate(candidate));
 
         } else if (object.getString("command").equals("takeConfiguration")) {
           SessionDescription.Type type = SessionDescription.Type.fromCanonicalForm(object.getString("type"));
           SessionDescription sdp = new SessionDescription(type, object.getString("sdp"));
-          listener.onTakeConfiguration(sdp);
+          listeners.forEach(listener -> listener.onTakeConfiguration(sdp));
         }
     }});
 

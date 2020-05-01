@@ -8,9 +8,6 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import org.webrtc.IceCandidate;
-import org.webrtc.SessionDescription;
-
 import java.util.List;
 
 import pub.devrel.easypermissions.AfterPermissionGranted;
@@ -39,7 +36,7 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
   private void start() {
     WssAntService wss = new WssAntService();
 
-    wss.setListener(new WssAntService.WssAntEventListener() {
+    wss.addListener(new WssAntService.WssAntEventListener() {
       @Override
       public void onConnected() {
         wss.commandJoinRoom();
@@ -47,37 +44,15 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
       @Override
       public void onMyStreamIdReceive(String myStreamId) {
-        wss.commandPublishOwn(myStreamId);
-        mLocalView.config(true, myStreamId, wss.receiver, wss.sender);
+        mLocalView.initialize(true, myStreamId, wss);
       }
 
       @Override
       public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
-        remoteStreamsIds.forEach(wss::commandPlayRemote);
-        mRemoteView.config(false, remoteStreamsIds.get(0), wss.receiver, wss.sender);
-      }
-
-      @Override
-      public void onStart() {
-        //createPeer();
-      }
-
-      @Override
-      public void onTakeCandidate(IceCandidate candidate) {
-        //_peerConnection.addCandidate(candidate);
-      }
-
-      @Override
-      public void onTakeConfiguration(SessionDescription sdp) {
-      /*
-      _peerConnection.setRemoteDescription(description);
-        if (!widget.isHoster) {
-          _peerConnection.createAnswer(_offerSdpConstraints).then((RTCSessionDescription answer) {
-            _peerConnection.setLocalDescription(answer);
-            sendData({"command": "takeConfiguration", "streamId": widget.streamId, "type": "answer", "sdp": answer.sdp});
-          });
+        for (int i = 0; i < remoteStreamsIds.size(); i++) {
+          String remoteStreamId = remoteStreamsIds.get(i);
+          if (i == 0) mRemoteView.initialize(false, remoteStreamId, wss);
         }
-      * */
       }
     });
 

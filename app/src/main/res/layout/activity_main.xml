@@ -11,13 +11,7 @@
         android:id="@+id/remote_renderer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <org.webrtc.SurfaceViewRenderer
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-
-    </com.example.ant_media_test.WebRtcView>
+        android:layout_weight="1"/>
 
     <View
         android:layout_width="match_parent"
@@ -27,12 +21,6 @@
         android:id="@+id/camera_renderer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-
-        <org.webrtc.SurfaceViewRenderer
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-
-    </com.example.ant_media_test.WebRtcView>
+        android:layout_weight="1"/>
 
 </LinearLayout>
