@@ -25,9 +25,9 @@ public class WssAntService {
     default void onConnected(){}
     default void onMyStreamIdReceive(String myStreamId){}
     default void onRemoteStreamsIdReceive(List<String> remoteStreamsIds){}
-    default void onStart(){}
-    default void onTakeCandidate(IceCandidate candidate){}
-    default void onTakeConfiguration(SessionDescription sdp){}
+    default void onStart(String streamId){}
+    default void onTakeCandidate(String streamId, IceCandidate candidate){}
+    default void onTakeConfiguration(String streamId, SessionDescription sdp){}
   }
 
   public static final String SERVER_URL = "https://twilio.rtt.space/ant-ws/";
@@ -39,7 +39,7 @@ public class WssAntService {
 
   private List<WssAntEventListener> listeners = new ArrayList<>();
 
-  private String myStreamId;
+  private String streamId;
   private List<String> remoteStreamsIds = new ArrayList<>();
 
   public void addListener(WssAntEventListener listener) {
@@ -106,12 +106,12 @@ public class WssAntService {
         JSONObject object = new JSONObject(message);
         //receiver.onNext(message);
 
+        streamId = object.getString("streamId");
+
         switch (object.getString("command")) {
           case "notification":
             switch (object.getString("definition")) {
               case "joinedTheRoom":
-
-                myStreamId = object.getString("streamId");
 
                 JSONArray array = object.optJSONArray("streams");
                 if (array != null) {
@@ -121,12 +121,12 @@ public class WssAntService {
                   }
                 }
 
-                System.out.println("##### joinedTheRoom: my " + myStreamId);
+                System.out.println("##### joinedTheRoom: my " + streamId);
                 System.out.println("##### joinedTheRoom: remote " + remoteStreamsIds);
 
                 listeners.forEach(listener -> {
                   System.out.println("##### emit");
-                  listener.onMyStreamIdReceive(myStreamId);
+                  listener.onMyStreamIdReceive(streamId);
                   listener.onRemoteStreamsIdReceive(remoteStreamsIds);
                 });
 
@@ -143,8 +143,9 @@ public class WssAntService {
                 break;
             }
             break;
+
           case "start":
-            listeners.forEach(listener -> listener.onStart());
+            listeners.forEach(listener -> listener.onStart(streamId));
 
             break;
           case "takeCandidate":
@@ -153,14 +154,14 @@ public class WssAntService {
             IceCandidate candidate = new IceCandidate(object.getString("id"),
               object.getInt("label"), object.getString("candidate"));
             System.out.println("##### ws takeCandidate " + candidate);
-            listeners.forEach(listener -> listener.onTakeCandidate(candidate));
+            listeners.forEach(listener -> listener.onTakeCandidate(streamId, candidate));
 
             break;
           case "takeConfiguration":
             SessionDescription.Type type = SessionDescription.Type.fromCanonicalForm(object.getString("type"));
             SessionDescription sdp = new SessionDescription(type, object.getString("sdp"));
             System.out.println("##### ws takeConfiguration: " + sdp.type);
-            listeners.forEach(listener -> listener.onTakeConfiguration(sdp));
+            listeners.forEach(listener -> listener.onTakeConfiguration(streamId, sdp));
             break;
         }
     }});
@@ -211,7 +212,7 @@ public class WssAntService {
     if (candidate != null) {
       send("{" +
         "\"command\":\"takeCandidate\", " +
-        "\"streamId\":\"" + myStreamId + "\", " +
+        "\"streamId\":\"" + streamId + "\", " +
         "\"label\":" + candidate.sdpMLineIndex + ", " +
         "\"id\":\"" + candidate.sdpMid + "\", " +
         "\"candidate\":\"" + candidate + "\"" +

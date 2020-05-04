@@ -47,14 +47,16 @@ public class MainActivity extends AppCompatActivity implements EasyPermissions.P
 
       @Override
       public void onMyStreamIdReceive(String myStreamId) {
-        mLocalView.initialize(true, myStreamId, wss);
+        runOnUiThread(() -> mLocalView.initialize(true, myStreamId, wss));
       }
 
       @Override
       public void onRemoteStreamsIdReceive(List<String> remoteStreamsIds) {
         for (int i = 0; i < remoteStreamsIds.size(); i++) {
-          String remoteStreamId = remoteStreamsIds.get(i);
-          if (i == 0) mRemoteView.initialize(false, remoteStreamId, wss);
+          if (i == 0) {
+            String remoteStreamId = remoteStreamsIds.get(i);
+            runOnUiThread(() -> mRemoteView.initialize(false, remoteStreamId, wss));
+          }
         }
       }
     });
