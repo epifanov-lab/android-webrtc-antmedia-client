@@ -35,7 +35,8 @@ dependencies {
 
     implementation 'pub.devrel:easypermissions:3.0.0'
 
-    implementation 'org.webrtc:google-webrtc:1.0.28513'
+    implementation files('libs/libwebrtc_h264_omxgoogle.aar')
+
     implementation 'com.neovisionaries:nv-websocket-client:2.9'
     implementation 'io.projectreactor:reactor-core:3.3.0.RELEASE'
 }

@@ -32,11 +32,10 @@ import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static android.view.ViewGroup.LayoutParams.MATCH_PARENT;
-import static org.webrtc.PeerConnectionFactory.*;
+import static org.webrtc.PeerConnectionFactory.InitializationOptions;
 import static org.webrtc.PeerConnectionFactory.builder;
 
 public class WebRtcView extends FrameLayout {
